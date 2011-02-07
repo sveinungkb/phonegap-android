@@ -5,6 +5,7 @@
  * 
  * Copyright (c) 2005-2010, Nitobi Software Inc.
  * Copyright (c) 2010, IBM Corporation
+ * Copyright (c) 2011, Giant Leap Technologies AS
  */
 /*
  * Copyright (C) 2009 The Android Open Source Project
@@ -27,14 +28,15 @@ package com.phonegap;
 import java.lang.reflect.Constructor;
 import java.util.HashMap;
 
-import android.app.Activity;
-import android.util.Log;
-import android.webkit.WebView;
-
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import android.app.Activity;
+import android.content.Intent;
+import android.net.Uri;
+import android.util.Log;
+import android.webkit.WebView;
 /**
  * This abstract class defines SDK-independent API for communication with
  * Contacts Provider. The actual implementation used by the application depends
@@ -202,6 +204,18 @@ public abstract class ContactAccessor {
      * Handles removing a contact from the database.
      */
 	public abstract boolean remove(String id);
+	
+	/**
+	 * Get the contact picker intent for this SDK level
+	 */
+	public abstract Intent getContactPickerIntent();
+	
+	/**
+	 * Will return a JSONOBject representing the contact at this URI
+	 * @param a valid URI pointing to a contact
+	 * @return JSONObject/Contact
+	 */
+	public abstract JSONObject getContactWithUri(Uri contactUri);
 	
 	/**
 	 * A class that represents the where clause to be used in the database query 

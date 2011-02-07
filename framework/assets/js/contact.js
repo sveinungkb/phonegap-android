@@ -4,6 +4,7 @@
  *
  * Copyright (c) 2005-2010, Nitobi Software Inc.
  * Copyright (c) 2010, IBM Corporation
+ * Copyright (c) 2011, Giant Leap Technologies AS
  */
 
 /**
@@ -261,6 +262,14 @@ Contacts.prototype.create = function(properties) {
         }
     }
     return contact;
+};
+
+/**
+* Shows the default contact picker so the user can select a contact.
+* @return Contact representation of the selected contact
+*/
+Contacts.prototype.chooseContact = function(successCB, options) {
+    PhoneGap.exec(successCB, successCB, "Contacts", "chooseContact", []);
 };
 
 /**

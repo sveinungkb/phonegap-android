@@ -40,9 +40,12 @@ import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.app.Activity;
 import android.content.ContentProviderOperation;
+import android.content.ContentProviderOperation.Builder;
 import android.content.ContentValues;
+import android.content.Intent;
 import android.content.OperationApplicationException;
 import android.database.Cursor;
+import android.net.Uri;
 import android.os.RemoteException;
 import android.provider.ContactsContract;
 import android.util.Log;
@@ -50,92 +53,124 @@ import android.webkit.WebView;
 
 /**
  * An implementation of {@link ContactAccessor} that uses current Contacts API.
- * This class should be used on Eclair or beyond, but would not work on any earlier
- * release of Android.  As a matter of fact, it could not even be loaded.
+ * This class should be used on Eclair or beyond, but would not work on any
+ * earlier release of Android. As a matter of fact, it could not even be loaded.
  * <p>
  * This implementation has several advantages:
  * <ul>
  * <li>It sees contacts from multiple accounts.
- * <li>It works with aggregated contacts. So for example, if the contact is the result
- * of aggregation of two raw contacts from different accounts, it may return the name from
- * one and the phone number from the other.
+ * <li>It works with aggregated contacts. So for example, if the contact is the
+ * result of aggregation of two raw contacts from different accounts, it may
+ * return the name from one and the phone number from the other.
  * <li>It is efficient because it uses the more efficient current API.
- * <li>Not obvious in this particular example, but it has access to new kinds
- * of data available exclusively through the new APIs. Exercise for the reader: add support
- * for nickname (see {@link android.provider.ContactsContract.CommonDataKinds.Nickname}) or
- * social status updates (see {@link android.provider.ContactsContract.StatusUpdates}).
+ * <li>Not obvious in this particular example, but it has access to new kinds of
+ * data available exclusively through the new APIs. Exercise for the reader: add
+ * support for nickname (see
+ * {@link android.provider.ContactsContract.CommonDataKinds.Nickname}) or social
+ * status updates (see {@link android.provider.ContactsContract.StatusUpdates}).
  * </ul>
  */
 public class ContactAccessorSdk5 extends ContactAccessor {
-	
-	/**
-	 * A static map that converts the JavaScript property name to Android database column name.
-	 */
-    private static final Map<String, String> dbMap = new HashMap<String, String>();
-    static {
-    	dbMap.put("id", ContactsContract.Contacts._ID);
-    	dbMap.put("displayName", ContactsContract.Contacts.DISPLAY_NAME);
-    	dbMap.put("name", ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME);
-    	dbMap.put("name.formatted", ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME);
-    	dbMap.put("name.familyName", ContactsContract.CommonDataKinds.StructuredName.FAMILY_NAME);
-    	dbMap.put("name.givenName", ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME);
-    	dbMap.put("name.middleName", ContactsContract.CommonDataKinds.StructuredName.MIDDLE_NAME);
-    	dbMap.put("name.honorificPrefix", ContactsContract.CommonDataKinds.StructuredName.PREFIX);
-    	dbMap.put("name.honorificSuffix", ContactsContract.CommonDataKinds.StructuredName.SUFFIX);
-    	dbMap.put("nickname", ContactsContract.CommonDataKinds.Nickname.NAME);
-    	dbMap.put("phoneNumbers", ContactsContract.CommonDataKinds.Phone.NUMBER);
-    	dbMap.put("phoneNumbers.value", ContactsContract.CommonDataKinds.Phone.NUMBER);
-    	dbMap.put("emails", ContactsContract.CommonDataKinds.Email.DATA);
-    	dbMap.put("emails.value", ContactsContract.CommonDataKinds.Email.DATA);
-    	dbMap.put("addresses", ContactsContract.CommonDataKinds.StructuredPostal.FORMATTED_ADDRESS);
-    	dbMap.put("addresses.formatted", ContactsContract.CommonDataKinds.StructuredPostal.FORMATTED_ADDRESS);
-    	dbMap.put("addresses.streetAddress", ContactsContract.CommonDataKinds.StructuredPostal.STREET);
-    	dbMap.put("addresses.locality", ContactsContract.CommonDataKinds.StructuredPostal.CITY);
-    	dbMap.put("addresses.region", ContactsContract.CommonDataKinds.StructuredPostal.REGION);
-    	dbMap.put("addresses.postalCode", ContactsContract.CommonDataKinds.StructuredPostal.POSTCODE);
-    	dbMap.put("addresses.country", ContactsContract.CommonDataKinds.StructuredPostal.COUNTRY);
-    	dbMap.put("ims", ContactsContract.CommonDataKinds.Im.DATA);
-    	dbMap.put("ims.value", ContactsContract.CommonDataKinds.Im.DATA);
-    	dbMap.put("organizations", ContactsContract.CommonDataKinds.Organization.COMPANY);
-    	dbMap.put("organizations.name", ContactsContract.CommonDataKinds.Organization.COMPANY);
-    	dbMap.put("organizations.department", ContactsContract.CommonDataKinds.Organization.DEPARTMENT);
-    	dbMap.put("organizations.title", ContactsContract.CommonDataKinds.Organization.TITLE);
-    	dbMap.put("organizations.location", ContactsContract.CommonDataKinds.Organization.OFFICE_LOCATION);
-    	dbMap.put("organizations.description", ContactsContract.CommonDataKinds.Organization.JOB_DESCRIPTION);
-    	//dbMap.put("published", null);
-    	//dbMap.put("updated", null);
-    	dbMap.put("birthday", ContactsContract.CommonDataKinds.Event.CONTENT_ITEM_TYPE);
-    	dbMap.put("anniversary", ContactsContract.CommonDataKinds.Event.CONTENT_ITEM_TYPE);
-    	//dbMap.put("gender", null);
-    	dbMap.put("note", ContactsContract.CommonDataKinds.Note.NOTE);
-    	//dbMap.put("preferredUsername", null);
-    	//dbMap.put("photos.value", null);
-    	//dbMap.put("tags.value", null);
-    	dbMap.put("relationships", ContactsContract.CommonDataKinds.Relation.NAME);
-    	dbMap.put("relationships.value", ContactsContract.CommonDataKinds.Relation.NAME);
-    	dbMap.put("urls", ContactsContract.CommonDataKinds.Website.URL);
-    	dbMap.put("urls.value", ContactsContract.CommonDataKinds.Website.URL);
-    	//dbMap.put("accounts.domain", null);
-    	//dbMap.put("accounts.username", null);
-    	//dbMap.put("accounts.userid", null);
-    	//dbMap.put("utcOffset", null);
-    	//dbMap.put("connected", null);
-    }
 
-    /**
-     * Create an contact accessor.
-     */
-    public ContactAccessorSdk5(WebView view, Activity app) {
-		mApp = app;
+	/**
+	 * A static map that converts the JavaScript property name to Android
+	 * database column name.
+	 */
+	private static final Map<String, String> dbMap = new HashMap<String, String>();
+	static {
+		dbMap.put("id", ContactsContract.Contacts._ID);
+		dbMap.put("displayName", ContactsContract.Contacts.DISPLAY_NAME);
+		dbMap.put("name",
+				ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME);
+		dbMap.put("name.formatted",
+				ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME);
+		dbMap.put("name.familyName",
+				ContactsContract.CommonDataKinds.StructuredName.FAMILY_NAME);
+		dbMap.put("name.givenName",
+				ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME);
+		dbMap.put("name.middleName",
+				ContactsContract.CommonDataKinds.StructuredName.MIDDLE_NAME);
+		dbMap.put("name.honorificPrefix",
+				ContactsContract.CommonDataKinds.StructuredName.PREFIX);
+		dbMap.put("name.honorificSuffix",
+				ContactsContract.CommonDataKinds.StructuredName.SUFFIX);
+		dbMap.put("nickname", ContactsContract.CommonDataKinds.Nickname.NAME);
+		dbMap.put("phoneNumbers", ContactsContract.CommonDataKinds.Phone.NUMBER);
+		dbMap.put("phoneNumbers.value",
+				ContactsContract.CommonDataKinds.Phone.NUMBER);
+		dbMap.put("emails", ContactsContract.CommonDataKinds.Email.DATA);
+		dbMap.put("emails.value", ContactsContract.CommonDataKinds.Email.DATA);
+		dbMap.put(
+				"addresses",
+				ContactsContract.CommonDataKinds.StructuredPostal.FORMATTED_ADDRESS);
+		dbMap.put(
+				"addresses.formatted",
+				ContactsContract.CommonDataKinds.StructuredPostal.FORMATTED_ADDRESS);
+		dbMap.put("addresses.streetAddress",
+				ContactsContract.CommonDataKinds.StructuredPostal.STREET);
+		dbMap.put("addresses.locality",
+				ContactsContract.CommonDataKinds.StructuredPostal.CITY);
+		dbMap.put("addresses.region",
+				ContactsContract.CommonDataKinds.StructuredPostal.REGION);
+		dbMap.put("addresses.postalCode",
+				ContactsContract.CommonDataKinds.StructuredPostal.POSTCODE);
+		dbMap.put("addresses.country",
+				ContactsContract.CommonDataKinds.StructuredPostal.COUNTRY);
+		dbMap.put("ims", ContactsContract.CommonDataKinds.Im.DATA);
+		dbMap.put("ims.value", ContactsContract.CommonDataKinds.Im.DATA);
+		dbMap.put("organizations",
+				ContactsContract.CommonDataKinds.Organization.COMPANY);
+		dbMap.put("organizations.name",
+				ContactsContract.CommonDataKinds.Organization.COMPANY);
+		dbMap.put("organizations.department",
+				ContactsContract.CommonDataKinds.Organization.DEPARTMENT);
+		dbMap.put("organizations.title",
+				ContactsContract.CommonDataKinds.Organization.TITLE);
+		dbMap.put("organizations.location",
+				ContactsContract.CommonDataKinds.Organization.OFFICE_LOCATION);
+		dbMap.put("organizations.description",
+				ContactsContract.CommonDataKinds.Organization.JOB_DESCRIPTION);
+		// dbMap.put("published", null);
+		// dbMap.put("updated", null);
+		dbMap.put("birthday",
+				ContactsContract.CommonDataKinds.Event.CONTENT_ITEM_TYPE);
+		dbMap.put("anniversary",
+				ContactsContract.CommonDataKinds.Event.CONTENT_ITEM_TYPE);
+		// dbMap.put("gender", null);
+		dbMap.put("note", ContactsContract.CommonDataKinds.Note.NOTE);
+		// dbMap.put("preferredUsername", null);
+		// dbMap.put("photos.value", null);
+		// dbMap.put("tags.value", null);
+		dbMap.put("relationships",
+				ContactsContract.CommonDataKinds.Relation.NAME);
+		dbMap.put("relationships.value",
+				ContactsContract.CommonDataKinds.Relation.NAME);
+		dbMap.put("urls", ContactsContract.CommonDataKinds.Website.URL);
+		dbMap.put("urls.value", ContactsContract.CommonDataKinds.Website.URL);
+		// dbMap.put("accounts.domain", null);
+		// dbMap.put("accounts.username", null);
+		// dbMap.put("accounts.userid", null);
+		// dbMap.put("utcOffset", null);
+		// dbMap.put("connected", null);
+	}
+
+	/**
+	 * Create an contact accessor.
+	 */
+	public ContactAccessorSdk5(WebView view, Activity context) {
+		mApp = context;
 		mView = view;
 	}
-	
-	/** 
-	 * This method takes the fields required and search options in order to produce an 
-	 * array of contacts that matches the criteria provided.
-	 * @param fields an array of items to be used as search criteria
-	 * @param options that can be applied to contact searching
-	 * @return an array of contacts 
+
+	/**
+	 * This method takes the fields required and search options in order to
+	 * produce an array of contacts that matches the criteria provided.
+	 * 
+	 * @param fields
+	 *            an array of items to be used as search criteria
+	 * @param options
+	 *            that can be applied to contact searching
+	 * @return an array of contacts
 	 */
 	@Override
 	public JSONArray search(JSONArray fields, JSONObject options) {
@@ -144,14 +179,13 @@ public class ContactAccessorSdk5 extends ContactAccessor {
 
 		// Get the find options
 		String searchTerm = "";
-		int limit = 1;
+		int limit = 500;
 		boolean multiple = false;
 		try {
 			searchTerm = options.getString("filter");
-			if (searchTerm.length()==0) {
+			if (searchTerm.length() == 0) {
 				searchTerm = "%";
-			}
-			else {
+			} else {
 				searchTerm = "%" + searchTerm + "%";
 			}
 			multiple = options.getBoolean("multiple");
@@ -161,45 +195,45 @@ public class ContactAccessorSdk5 extends ContactAccessor {
 		} catch (JSONException e) {
 			Log.e(LOG_TAG, e.getMessage(), e);
 		}
-		
-		//Log.d(LOG_TAG, "Search Term = " + searchTerm);
-		//Log.d(LOG_TAG, "Field Length = " + fields.length());
-		//Log.d(LOG_TAG, "Fields = " + fields.toString());
 
-		// Loop through the fields the user provided to see what data should be returned.
-		HashMap<String,Boolean> populate = buildPopulationSet(fields);
-		
+		// Log.d(LOG_TAG, "Search Term = " + searchTerm);
+		// Log.d(LOG_TAG, "Field Length = " + fields.length());
+		// Log.d(LOG_TAG, "Fields = " + fields.toString());
+
+		// Loop through the fields the user provided to see what data should be
+		// returned.
+		HashMap<String, Boolean> populate = buildPopulationSet(fields);
+
 		// Build the ugly where clause and where arguments for one big query.
 		WhereOptions whereOptions = buildWhereClause(fields, searchTerm);
-			
+
 		// Get all the id's where the search term matches the fields passed in.
-		Cursor idCursor = mApp.getContentResolver().query(ContactsContract.Data.CONTENT_URI,
+		Cursor idCursor = mApp.getContentResolver().query(
+				ContactsContract.Data.CONTENT_URI,
 				new String[] { ContactsContract.Data.CONTACT_ID },
-				whereOptions.getWhere(),
-				whereOptions.getWhereArgs(),
-				ContactsContract.Data.CONTACT_ID + " ASC");				
+				whereOptions.getWhere(), whereOptions.getWhereArgs(),
+				ContactsContract.Data.CONTACT_ID + " ASC");
 
 		// Create a set of unique ids
-		//Log.d(LOG_TAG, "ID cursor query returns = " + idCursor.getCount());
+		// Log.d(LOG_TAG, "ID cursor query returns = " + idCursor.getCount());
 		Set<String> contactIds = new HashSet<String>();
 		while (idCursor.moveToNext()) {
-			contactIds.add(idCursor.getString(idCursor.getColumnIndex(ContactsContract.Data.CONTACT_ID)));
+			contactIds.add(idCursor.getString(idCursor
+					.getColumnIndex(ContactsContract.Data.CONTACT_ID)));
 		}
 		idCursor.close();
-		
+
 		// Build a query that only looks at ids
 		WhereOptions idOptions = buildIdClause(contactIds, searchTerm);
-		
+
 		// Do the id query
-		Cursor c = mApp.getContentResolver().query(ContactsContract.Data.CONTENT_URI,
-				null,
-				idOptions.getWhere(),
+		Cursor c = mApp.getContentResolver().query(
+				ContactsContract.Data.CONTENT_URI, null, idOptions.getWhere(),
 				idOptions.getWhereArgs(),
-				ContactsContract.Data.CONTACT_ID + " ASC");				
-		
-		
-		//Log.d(LOG_TAG, "Cursor length = " + c.getCount());
-		
+				ContactsContract.Data.CONTACT_ID + " ASC");
+
+		// Log.d(LOG_TAG, "Cursor length = " + c.getCount());
+
 		String contactId = "";
 		String rawId = "";
 		String oldContactId = "";
@@ -1629,7 +1663,7 @@ public class ContactAccessorSdk5 extends ContactAccessor {
 			stringType = "isdn";
 			break;
 		case ContactsContract.CommonDataKinds.Phone.TYPE_OTHER:
-		default: 
+		default:
 			stringType = "other";
 			break;
 		}
@@ -1638,171 +1672,290 @@ public class ContactAccessorSdk5 extends ContactAccessor {
 
 	/**
 	 * Converts a string from the W3C Contact API to it's Android int value.
+	 * 
 	 * @param string
 	 * @return Android int value
 	 */
 	private int getContactType(String string) {
 		int type = ContactsContract.CommonDataKinds.Email.TYPE_OTHER;
-		if (string!=null) {
+		if (string != null) {
 			if ("home".equals(string.toLowerCase())) {
 				return ContactsContract.CommonDataKinds.Email.TYPE_HOME;
-			}
-			else if ("work".equals(string.toLowerCase())) {
+			} else if ("work".equals(string.toLowerCase())) {
 				return ContactsContract.CommonDataKinds.Email.TYPE_WORK;
-			}
-			else if ("other".equals(string.toLowerCase())) {
+			} else if ("other".equals(string.toLowerCase())) {
 				return ContactsContract.CommonDataKinds.Email.TYPE_OTHER;
-			}
-			else if ("mobile".equals(string.toLowerCase())) {
+			} else if ("mobile".equals(string.toLowerCase())) {
 				return ContactsContract.CommonDataKinds.Email.TYPE_MOBILE;
-			}
-			else if ("custom".equals(string.toLowerCase())) {
+			} else if ("custom".equals(string.toLowerCase())) {
 				return ContactsContract.CommonDataKinds.Email.TYPE_CUSTOM;
-			}		
+			}
 		}
 		return type;
 	}
 
 	/**
 	 * getPhoneType converts an Android phone type into a string
-	 * @param type 
+	 * 
+	 * @param type
 	 * @return phone type as string.
 	 */
 	private String getContactType(int type) {
 		String stringType;
 		switch (type) {
-			case ContactsContract.CommonDataKinds.Email.TYPE_CUSTOM: 
-				stringType = "custom";
-				break;
-			case ContactsContract.CommonDataKinds.Email.TYPE_HOME: 
-				stringType = "home";
-				break;
-			case ContactsContract.CommonDataKinds.Email.TYPE_WORK: 
-				stringType = "work";
-				break;
-			case ContactsContract.CommonDataKinds.Email.TYPE_MOBILE: 
-				stringType = "mobile";
-				break;
-			case ContactsContract.CommonDataKinds.Email.TYPE_OTHER: 
-			default: 
-				stringType = "other";
-				break;
+		case ContactsContract.CommonDataKinds.Email.TYPE_CUSTOM:
+			stringType = "custom";
+			break;
+		case ContactsContract.CommonDataKinds.Email.TYPE_HOME:
+			stringType = "home";
+			break;
+		case ContactsContract.CommonDataKinds.Email.TYPE_WORK:
+			stringType = "work";
+			break;
+		case ContactsContract.CommonDataKinds.Email.TYPE_MOBILE:
+			stringType = "mobile";
+			break;
+		case ContactsContract.CommonDataKinds.Email.TYPE_OTHER:
+		default:
+			stringType = "other";
+			break;
 		}
 		return stringType;
 	}
 
 	/**
 	 * Converts a string from the W3C Contact API to it's Android int value.
+	 * 
 	 * @param string
 	 * @return Android int value
 	 */
 	private int getRelationshipType(String string) {
 		int type = ContactsContract.CommonDataKinds.Relation.TYPE_CUSTOM;
-		if (string!=null) {
+		if (string != null) {
 			if ("assistant".equals(string.toLowerCase())) {
 				return ContactsContract.CommonDataKinds.Relation.TYPE_ASSISTANT;
-			}
-			else if ("brother".equals(string.toLowerCase())) {
+			} else if ("brother".equals(string.toLowerCase())) {
 				return ContactsContract.CommonDataKinds.Relation.TYPE_BROTHER;
-			}
-			else if ("child".equals(string.toLowerCase())) {
+			} else if ("child".equals(string.toLowerCase())) {
 				return ContactsContract.CommonDataKinds.Relation.TYPE_CHILD;
-			}
-			else if ("domestic partner".equals(string.toLowerCase())) {
+			} else if ("domestic partner".equals(string.toLowerCase())) {
 				return ContactsContract.CommonDataKinds.Relation.TYPE_DOMESTIC_PARTNER;
-			}
-			else if ("father".equals(string.toLowerCase())) {
+			} else if ("father".equals(string.toLowerCase())) {
 				return ContactsContract.CommonDataKinds.Relation.TYPE_FATHER;
-			}
-			else if ("friend".equals(string.toLowerCase())) {
+			} else if ("friend".equals(string.toLowerCase())) {
 				return ContactsContract.CommonDataKinds.Relation.TYPE_FRIEND;
-			}
-			else if ("manager".equals(string.toLowerCase())) {
+			} else if ("manager".equals(string.toLowerCase())) {
 				return ContactsContract.CommonDataKinds.Relation.TYPE_MANAGER;
-			}
-			else if ("mother".equals(string.toLowerCase())) {
+			} else if ("mother".equals(string.toLowerCase())) {
 				return ContactsContract.CommonDataKinds.Relation.TYPE_MOTHER;
-			}
-			else if ("parent".equals(string.toLowerCase())) {
+			} else if ("parent".equals(string.toLowerCase())) {
 				return ContactsContract.CommonDataKinds.Relation.TYPE_PARENT;
-			}
-			else if ("partner".equals(string.toLowerCase())) {
+			} else if ("partner".equals(string.toLowerCase())) {
 				return ContactsContract.CommonDataKinds.Relation.TYPE_PARTNER;
-			}
-			else if ("referred by".equals(string.toLowerCase())) {
+			} else if ("referred by".equals(string.toLowerCase())) {
 				return ContactsContract.CommonDataKinds.Relation.TYPE_REFERRED_BY;
-			}
-			else if ("relative".equals(string.toLowerCase())) {
+			} else if ("relative".equals(string.toLowerCase())) {
 				return ContactsContract.CommonDataKinds.Relation.TYPE_RELATIVE;
-			}
-			else if ("sister".equals(string.toLowerCase())) {
+			} else if ("sister".equals(string.toLowerCase())) {
 				return ContactsContract.CommonDataKinds.Relation.TYPE_SISTER;
-			}
-			else if ("spouse".equals(string.toLowerCase())) {
+			} else if ("spouse".equals(string.toLowerCase())) {
 				return ContactsContract.CommonDataKinds.Relation.TYPE_SPOUSE;
-			}
-			else if ("custom".equals(string.toLowerCase())) {
+			} else if ("custom".equals(string.toLowerCase())) {
 				return ContactsContract.CommonDataKinds.Relation.TYPE_CUSTOM;
-			}		
+			}
 		}
 		return type;
 	}
 
 	/**
 	 * getPhoneType converts an Android phone type into a string
-	 * @param type 
+	 * 
+	 * @param type
 	 * @return phone type as string.
 	 */
 	private String getRelationshipType(int type) {
 		String stringType;
 		switch (type) {
-			case ContactsContract.CommonDataKinds.Relation.TYPE_ASSISTANT: 
-				stringType = "assistant";
-				break;
-			case ContactsContract.CommonDataKinds.Relation.TYPE_BROTHER: 
-				stringType = "brother";
-				break;
-			case ContactsContract.CommonDataKinds.Relation.TYPE_CHILD: 
-				stringType = "child";
-				break;
-			case ContactsContract.CommonDataKinds.Relation.TYPE_DOMESTIC_PARTNER: 
-				stringType = "domestic partner";
-				break;
-			case ContactsContract.CommonDataKinds.Relation.TYPE_FATHER: 
-				stringType = "father";
-				break;
-			case ContactsContract.CommonDataKinds.Relation.TYPE_FRIEND: 
-				stringType = "friend";
-				break;
-			case ContactsContract.CommonDataKinds.Relation.TYPE_MANAGER: 
-				stringType = "manager";
-				break;
-			case ContactsContract.CommonDataKinds.Relation.TYPE_MOTHER: 
-				stringType = "mother";
-				break;
-			case ContactsContract.CommonDataKinds.Relation.TYPE_PARENT: 
-				stringType = "parent";
-				break;
-			case ContactsContract.CommonDataKinds.Relation.TYPE_PARTNER: 
-				stringType = "partner";
-				break;
-			case ContactsContract.CommonDataKinds.Relation.TYPE_REFERRED_BY: 
-				stringType = "referred by";
-				break;
-			case ContactsContract.CommonDataKinds.Relation.TYPE_RELATIVE: 
-				stringType = "relative";
-				break;
-			case ContactsContract.CommonDataKinds.Relation.TYPE_SISTER: 
-				stringType = "sister";
-				break;
-			case ContactsContract.CommonDataKinds.Relation.TYPE_SPOUSE: 
-				stringType = "spouse";
-				break;
-			case ContactsContract.CommonDataKinds.Relation.TYPE_CUSTOM: 
-			default: 
-				stringType = "custom";
-				break;
+		case ContactsContract.CommonDataKinds.Relation.TYPE_ASSISTANT:
+			stringType = "assistant";
+			break;
+		case ContactsContract.CommonDataKinds.Relation.TYPE_BROTHER:
+			stringType = "brother";
+			break;
+		case ContactsContract.CommonDataKinds.Relation.TYPE_CHILD:
+			stringType = "child";
+			break;
+		case ContactsContract.CommonDataKinds.Relation.TYPE_DOMESTIC_PARTNER:
+			stringType = "domestic partner";
+			break;
+		case ContactsContract.CommonDataKinds.Relation.TYPE_FATHER:
+			stringType = "father";
+			break;
+		case ContactsContract.CommonDataKinds.Relation.TYPE_FRIEND:
+			stringType = "friend";
+			break;
+		case ContactsContract.CommonDataKinds.Relation.TYPE_MANAGER:
+			stringType = "manager";
+			break;
+		case ContactsContract.CommonDataKinds.Relation.TYPE_MOTHER:
+			stringType = "mother";
+			break;
+		case ContactsContract.CommonDataKinds.Relation.TYPE_PARENT:
+			stringType = "parent";
+			break;
+		case ContactsContract.CommonDataKinds.Relation.TYPE_PARTNER:
+			stringType = "partner";
+			break;
+		case ContactsContract.CommonDataKinds.Relation.TYPE_REFERRED_BY:
+			stringType = "referred by";
+			break;
+		case ContactsContract.CommonDataKinds.Relation.TYPE_RELATIVE:
+			stringType = "relative";
+			break;
+		case ContactsContract.CommonDataKinds.Relation.TYPE_SISTER:
+			stringType = "sister";
+			break;
+		case ContactsContract.CommonDataKinds.Relation.TYPE_SPOUSE:
+			stringType = "spouse";
+			break;
+		case ContactsContract.CommonDataKinds.Relation.TYPE_CUSTOM:
+		default:
+			stringType = "custom";
+			break;
 		}
 		return stringType;
 	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.phonegap.ContactAccessor#getContactPickerIntent()
+	 */
+	@Override
+	public Intent getContactPickerIntent() {
+		return new Intent(Intent.ACTION_PICK,
+				ContactsContract.Contacts.CONTENT_URI);
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.phonegap.ContactAccessor#getContactWithUri(android.net.Uri)
+	 */
+	@Override
+	public JSONObject getContactWithUri(Uri contactUri) {
+		String contactId = contactUri.getLastPathSegment();
+		if (contactId == null)
+			return null;
+
+		JSONObject contact = new JSONObject();
+
+		Set<String> contactIds = new HashSet<String>();
+		contactIds.add(contactId);
+
+		Cursor c = mApp.getContentResolver().query(
+				ContactsContract.Data.CONTENT_URI, null,
+				ContactsContract.Data.CONTACT_ID + " = ?",
+				new String[] { contactId },
+				ContactsContract.Data.CONTACT_ID + " ASC");
+
+		String rawId = "";
+		String mimetype = "";
+
+		JSONArray organizations = new JSONArray();
+		JSONArray addresses = new JSONArray();
+		JSONArray phones = new JSONArray();
+		JSONArray emails = new JSONArray();
+		JSONArray ims = new JSONArray();
+		JSONArray websites = new JSONArray();
+		JSONArray relationships = new JSONArray();
+
+		if (c.getCount() > 0) {
+			c.moveToFirst();
+			contactId = c.getString(c
+					.getColumnIndex(ContactsContract.Data.CONTACT_ID));
+			rawId = c.getString(c
+					.getColumnIndex(ContactsContract.Data.RAW_CONTACT_ID));
+
+			try {
+
+				contact = populateContact(contact, organizations, addresses,
+						phones, emails, ims, websites, relationships);
+				contact.put("id", contactId);
+				contact.put("rawId", rawId);
+				contact.put(
+						"displayName",
+						c.getString(c
+								.getColumnIndex(ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME)));
+
+				while (c.moveToNext()) {
+					mimetype = c.getString(c
+							.getColumnIndex(ContactsContract.Data.MIMETYPE));
+					if (mimetype
+							.equals(ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE)) {
+						contact.put("name", nameQuery(c));
+					} else if (mimetype
+							.equals(ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE)) {
+						phones.put(phoneQuery(c));
+					} else if (mimetype
+							.equals(ContactsContract.CommonDataKinds.Email.CONTENT_ITEM_TYPE)) {
+						emails.put(emailQuery(c));
+					} else if (mimetype
+							.equals(ContactsContract.CommonDataKinds.StructuredPostal.CONTENT_ITEM_TYPE)) {
+						addresses.put(addressQuery(c));
+					} else if (mimetype
+							.equals(ContactsContract.CommonDataKinds.Organization.CONTENT_ITEM_TYPE)) {
+						organizations.put(organizationQuery(c));
+					} else if (mimetype
+							.equals(ContactsContract.CommonDataKinds.Im.CONTENT_ITEM_TYPE)) {
+						ims.put(imQuery(c));
+					} else if (mimetype
+							.equals(ContactsContract.CommonDataKinds.Note.CONTENT_ITEM_TYPE)) {
+						contact.put(
+								"note",
+								c.getString(c
+										.getColumnIndex(ContactsContract.CommonDataKinds.Note.NOTE)));
+					} else if (mimetype
+							.equals(ContactsContract.CommonDataKinds.Nickname.CONTENT_ITEM_TYPE)) {
+						contact.put(
+								"nickname",
+								c.getString(c
+										.getColumnIndex(ContactsContract.CommonDataKinds.Nickname.NAME)));
+					} else if (mimetype
+							.equals(ContactsContract.CommonDataKinds.Website.CONTENT_ITEM_TYPE)) {
+						websites.put(websiteQuery(c));
+					} else if (mimetype
+							.equals(ContactsContract.CommonDataKinds.Relation.CONTENT_ITEM_TYPE)) {
+						relationships.put(relationshipQuery(c));
+					} else if (mimetype
+							.equals(ContactsContract.CommonDataKinds.Event.CONTENT_ITEM_TYPE)) {
+						if (ContactsContract.CommonDataKinds.Event.TYPE_ANNIVERSARY == c
+								.getInt(c
+										.getColumnIndex(ContactsContract.CommonDataKinds.Event.TYPE))) {
+							contact.put(
+									"anniversary",
+									c.getString(c
+											.getColumnIndex(ContactsContract.CommonDataKinds.Event.START_DATE)));
+						} else if (ContactsContract.CommonDataKinds.Event.TYPE_BIRTHDAY == c
+								.getInt(c
+										.getColumnIndex(ContactsContract.CommonDataKinds.Event.TYPE))) {
+							contact.put(
+									"birthday",
+									c.getString(c
+											.getColumnIndex(ContactsContract.CommonDataKinds.Event.START_DATE)));
+						}
+
+					}
+
+				}
+			} catch (JSONException e) {
+				Log.e(LOG_TAG, e.getLocalizedMessage());
+			}
+		}
+
+		c.close();
+		return contact;
+	}
+
 }
+

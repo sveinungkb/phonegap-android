@@ -5,6 +5,8 @@
  * 
  * Copyright (c) 2005-2010, Nitobi Software Inc.
  * Copyright (c) 2010, IBM Corporation
+ * Copyright (c) 2011, Giant Leap Technologies AS
+ * 
  */
 /*
  * Copyright (C) 2009 The Android Open Source Project
@@ -37,6 +39,7 @@ import org.json.JSONObject;
 import android.app.Activity;
 import android.content.ContentResolver;
 import android.content.ContentValues;
+import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
 import android.provider.Contacts;
@@ -816,10 +819,59 @@ public class ContactAccessorSdk3_4 extends ContactAccessor {
 	 * @param id the unique ID of the contact to remove
 	 */
 	public boolean remove(String id) {
-    	int result = mApp.getContentResolver().delete(People.CONTENT_URI, 
-    			PEOPLE_ID_EQUALS, 
-    			new String[] {id});
-    	
-    	return (result > 0) ? true : false;
+		int result = mApp.getContentResolver().delete(People.CONTENT_URI,
+				PEOPLE_ID_EQUALS, new String[] { id });
+
+		return (result > 0) ? true : false;
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.phonegap.ContactAccessor#getContactPickerIntent()
+	 */
+	@Override
+	public Intent getContactPickerIntent() {
+		return new Intent(Intent.ACTION_PICK, People.CONTENT_URI);
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.phonegap.ContactAccessor#getContactWithUri(android.net.Uri)
+	 */
+	@Override
+	public JSONObject getContactWithUri(Uri contactUri) {
+
+		String id = contactUri.getLastPathSegment();
+		if (id == null)
+			return null;
+
+		JSONObject contact = new JSONObject();
+
+		ContentResolver cr = mApp.getContentResolver();
+		// Do query for name and note
+		Cursor cur = cr.query(People.CONTENT_URI, new String[] {
+				People.DISPLAY_NAME, People.NOTES }, PEOPLE_ID_EQUALS,
+				new String[] { id }, null);
+		cur.moveToFirst();
+
+		try {
+			contact.put("id", id);
+			contact.put("displayName",
+					cur.getString(cur.getColumnIndex(People.DISPLAY_NAME)));
+
+			contact.put("phoneNumbers", phoneQuery(cr, id));
+
+			contact.put("emails", emailQuery(cr, id));
+			contact.put("addresses", addressQuery(cr, id));
+			contact.put("organizations", organizationQuery(cr, id));
+			contact.put("ims", imQuery(cr, id));
+			contact.put("note", cur.getString(cur.getColumnIndex(People.NOTES)));
+		} catch (JSONException e) {
+			e.printStackTrace();
+		}
+		return contact;
 	}
 }
+
